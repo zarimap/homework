@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI勉強時間管理アプリ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.run/@google/genai"
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
+  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+    
+    <header class="bg-indigo-600 text-white p-6 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">AI勉強時間記録アプリ</h1>
+        <p class="text-indigo-200 text-sm mt-1">写真とAIで正しく勉強時間を可視化</p>
+      </div>
+      <button id="btn-logout" onclick="handleLogout()" class="hidden bg-indigo-700 hover:bg-indigo-800 text-xs px-3 py-2 rounded-lg transition">ログアウト</button>
+    </header>
+
+    <div class="p-6">
+      <section id="sec-auth" class="max-w-md mx-auto space-y-4 py-8">
+        <h2 class="text-xl font-bold text-center text-slate-700">ログイン</h2>
+        <div>
+          <label class="block text-sm font-medium mb-1">メールアドレス (ID)</label>
+          <input type="email" id="auth-email" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="example@email.com">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">パスワード</label>
+          <input type="password" id="auth-password" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••••">
+        </div>
+        <button onclick="handleLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-3 rounded-lg shadow-md transition">ログイン</button>
+      </section>
+
+      <div id="sec-app" class="hidden space-y-8">
+        
+        <div class="flex border-b border-slate-200">
+          <button id="tab-child" onclick="switchRole('child')" class="flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600">子ども用（記録・確認）</button>
+          <button id="tab-parent" onclick="switchRole('parent')" class="flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700">保護者用（ダッシュボード）</button>
+        </div>
+
+        <div id="view-child" class="space-y-8">
+          <div class="bg-indigo-50/50 p-6 rounded-xl border border-indigo-100 space-y-4">
+            <h2 class="text-lg font-bold text-indigo-900">新しい勉強記録の追加</h2>
+            
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">勉強ノート・資料の写真</label>
+              <input type="file" id="photo-input" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">自己申告の勉強時間 (分)</label>
+              <input type="number" id="self-time" placeholder="例: 45" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+
+            <button id="btn-submit" onclick="processStudySession()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-lg shadow transition flex justify-center items-center gap-2">
+              <span>AIで判定して記録を保存</span>
+            </button>
+          </div>
+
+          <div id="result-box" class="hidden p-5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+            <h3 class="font-bold text-emerald-800 flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              AI推定完了
+            </h3>
+            <div class="text-sm text-emerald-900 space-y-1">
+              <p id="res-times"></p>
+              <p id="res-reason" class="text-xs text-emerald-700 italic"></p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <h3 class="text-lg font-bold text-slate-800">今週の記録詳細 (日〜土)</h3>
+            <div id="weekly-details-grid" class="grid grid-cols-1 md:grid-cols-7 gap-3">
+              </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex justify-between items-center">
+              <h3 class="text-lg font-bold text-slate-800">勉強時間の推移</h3>
+              <div class="flex gap-2">
+                <button id="btn-chart-month" onclick="renderChart('month')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md">1ヶ月 (週別)</button>
+                <button id="btn-chart-year" onclick="renderChart('year')" class="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md">1年 (月別)</button>
+              </div>
+            </div>
+            <div class="bg-white p-4 border rounded-xl shadow-sm">
+              <canvas id="studyChart" class="w-full h-64"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div id="view-parent" class="hidden space-y-6">
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">保護者確認ダッシュボード</h3>
+            <p class="text-xs text-slate-500">お子様がアップロードした写真と自己申告、およびAIが最終決定した時間の全履歴を確認できます。</p>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-sm text-slate-600">
+              <thead class="bg-slate-100 text-xs text-slate-700 uppercase">
+                <tr>
+                  <th class="p-3">日時</th>
+                  <th class="p-3">写真</th>
+                  <th class="p-3">自己申告</th>
+                  <th class="p-3">AI推定</th>
+                  <th class="p-3">確定時間</th>
+                  <th class="p-3">AIのコメント</th>
+                </tr>
+              </thead>
+              <tbody id="parent-history-list" class="divide-y divide-slate-200">
+                </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenAI } from '@google/genai';
+
+    // --- 【設定】必要情報を入力してください ---
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    let currentChart = null;
+    let currentUser = null;
+
+    // 初期起動時のセッションチェック
+    window.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        showApp();
+      }
+    });
+
+    // ログイン
+    window.handleLogin = async () => {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        alert('ログイン失敗: ' + error.message);
+      } else {
+        currentUser = data.user;
+        showApp();
+      }
+    };
+
+    // ログアウト
+    window.handleLogout = async () => {
+      await supabase.auth.signOut();
+      location.reload();
+    };
+
+    function showApp() {
+      document.getElementById('sec-auth').classList.add('hidden');
+      document.getElementById('sec-app').classList.remove('hidden');
+      document.getElementById('btn-logout').classList.remove('hidden');
+      
+      // データロードと描画
+      loadWeeklyDetails();
+      renderChart('month');
+      loadParentDashboard();
+    }
+
+    // タブ切り替え
+    window.switchRole = (role) => {
+      const childTab = document.getElementById('tab-child');
+      const parentTab = document.getElementById('tab-parent');
+      const childView = document.getElementById('view-child');
+      const parentView = document.getElementById('view-parent');
+
+      if (role === 'child') {
+        childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
+        parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        childView.classList.remove('hidden');
+        parentView.classList.add('hidden');
+      } else {
+        parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
+        childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        parentView.classList.remove('hidden');
+        childView.classList.add('hidden');
+      }
+    };
+
+    // AI処理と保存
+    window.processStudySession = async () => {
+      const fileInput = document.getElementById('photo-input');
+      const selfReported = parseInt(document.getElementById('self-time').value, 10);
+
+      if (!fileInput.files[0] || isNaN(selfReported)) {
+        alert('写真の選択と自己申告時間を正しく入力してください。');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerText = 'AI解析中...';
+
+      try {
+        const file = fileInput.files[0];
+
+        // 1. Supabase Storageに画像アップロード
+        const filePath = `${currentUser.id}/${Date.now()}_${file.name}`;
+        const { error: uploadErr } = await supabase.storage.from('study-photos').upload(filePath, file);
+        if (uploadErr) throw uploadErr;
+
+        const { data: { publicUrl } } = supabase.storage.from('study-photos').getPublicUrl(filePath);
+
+        // 2. 過去のデータ（直近5件）を取得し、AI学習用のコンテキストを作成
+        const { data: pastLogs } = await supabase
+          .from('study_logs')
+          .select('self_reported_minutes, ai_estimated_minutes, final_calculated_minutes')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const historyContext = pastLogs && pastLogs.length > 0 ? JSON.stringify(pastLogs) : '過去履歴なし';
+
+        // 3. 画像のBase64エンコード
+        const base64Data = await fileToBase64(file);
+
+        // 4. Gemini APIを呼び出し
+        const prompt = `
+          あなたは学習時間判定AIです。提供されたノート・教材画像の内容（書き込み量、文字数、問題数等）と、自己申告時間をもとに、適切な勉強時間を算出してください。
+          
+          【本人の過去傾向（自己申告値, AI推定値, 確定値）】:
+          ${historyContext}
+          
+          【今回の入力】:
+          - 自己申告時間: ${selfReported}分
+          
+          【指示】:
+          1. 画像から推定される勉強時間 (ai_estimated) を算出してください。
+          2. 過去の傾向と自己申告の偏りを評価し、最終的な正確な勉強時間 (final_calculated) を提示してください。
+          3. 出力は以下のJSON形式のみで返してください。
+
+          {"ai_estimated": 数値, "final_calculated": 数値, "reason": "根拠（50文字以内）"}
+        `;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            prompt,
+            { inlineData: { mimeType: file.type, data: base64Data } }
+          ],
+          config: { responseMimeType: 'application/json' }
+        });
+
+        const res = JSON.parse(response.text);
+
+        // 5. Databaseに結果をインサート
+        await supabase.from('study_logs').insert({
+          user_id: currentUser.id,
+          image_url: publicUrl,
+          self_reported_minutes: selfReported,
+          ai_estimated_minutes: res.ai_estimated,
+          final_calculated_minutes: res.final_calculated,
+          ai_feedback: res.reason
+        });
+
+        // 6. UI更新
+        document.getElementById('result-box').classList.remove('hidden');
+        document.getElementById('res-times').innerText = `自己申告: ${selfReported}分 | AI推定: ${res.ai_estimated}分 → 確定時間: ${res.final_calculated}分`;
+        document.getElementById('res-reason').innerText = `判定理由: ${res.reason}`;
+
+        // 各種描画を更新
+        loadWeeklyDetails();
+        renderChart('month');
+        loadParentDashboard();
+
+        // フォームリセット
+        document.getElementById('self-time').value = '';
+        fileInput.value = '';
+
+      } catch (err) {
+        alert('エラーが発生しました: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'AIで判定して記録を保存';
+      }
+    };
+
+    // 1週間（日〜土）の詳細表示
+    async function loadWeeklyDetails() {
+      const grid = document.getElementById('weekly-details-grid');
+      grid.innerHTML = '';
+
+      const daysName = ['日', '月', '火', '水', '木', '金', '土'];
+      
+      // 今週の日曜日の00:00:00を取得
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      // 土曜日の23:59:59
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      // 今週のログを取得
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', startOfWeek.toISOString())
+        .lte('created_at', endOfWeek.toISOString());
+
+      for (let i = 0; i < 7; i++) {
+        const targetDate = new Date(startOfWeek);
+        targetDate.setDate(startOfWeek.getDate() + i);
+
+        // 該当日のログを抽出
+        const dayLogs = (logs || []).filter(l => {
+          const d = new Date(l.created_at);
+          return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
+        });
+
+        const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm";
+        
+        let photosHtml = dayLogs.map(l => `<img src="${l.image_url}" class="w-full h-12 object-cover rounded shadow-inner" />`).join('');
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
+            <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
+            <span class="text-indigo-600">${totalMinutes}分</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 my-1">
+            ${photosHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center py-2">記録なし</p>'}
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    // Chart.jsによるグラフ描画 (1ヶ月 / 1年)
+    window.renderChart = async (type) => {
+      const monthBtn = document.getElementById('btn-chart-month');
+      const yearBtn = document.getElementById('btn-chart-year');
+
+      if (type === 'month') {
+        monthBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
+        yearBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+      } else {
+        yearBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
+        monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+      }
+
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: true });
+
+      let labels = [];
+      let dataValues = [];
+
+      if (type === 'month') {
+        // 直近4週間の「週（日〜土）」単位集計
+        labels = ['3週前', '2週前', '先週', '今週'];
+        dataValues = [0, 0, 0, 0];
+
+        const now = new Date();
+        const currentSun = new Date(now);
+        currentSun.setDate(now.getDate() - now.getDay());
+        currentSun.setHours(0,0,0,0);
+
+        (logs || []).forEach(log => {
+          const logDate = new Date(log.created_at);
+          const diffDays = Math.floor((currentSun - logDate) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 0 && diffDays > -7) dataValues[3] += log.final_calculated_minutes; // 今週
+          else if (diffDays > 0 && diffDays <= 7) dataValues[2] += log.final_calculated_minutes; // 先週
+          else if (diffDays > 7 && diffDays <= 14) dataValues[1] += log.final_calculated_minutes;
+          else if (diffDays > 14 && diffDays <= 21) dataValues[0] += log.final_calculated_minutes;
+        });
+
+      } else {
+        // 過去12ヶ月（1年）の月単位集計
+        labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+        dataValues = new Array(12).fill(0);
+
+        (logs || []).forEach(log => {
+          const m = new Date(log.created_at).getMonth();
+          dataValues[m] += log.final_calculated_minutes;
+        });
+      }
+
+      if (currentChart) currentChart.destroy();
+
+      const ctx = document.getElementById('studyChart').getContext('2d');
+      currentChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '勉強時間 (分)',
+            data: dataValues,
+            backgroundColor: 'rgba(79, 70, 229, 0.7)',
+            borderColor: 'rgb(79, 70, 229)',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: '分' } }
+          }
+        }
+      });
+    };
+
+    // 保護者用ダッシュボードのデータ取得
+    async function loadParentDashboard() {
+      const container = document.getElementById('parent-history-list');
+      
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (!logs || logs.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = logs.map(l => {
+        const d = new Date(l.created_at).toLocaleString('ja-JP');
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 text-xs">${d}</td>
+            <td class="p-3"><a href="${l.image_url}" target="_blank"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded border" /></a></td>
+            <td class="p-3">${l.self_reported_minutes}分</td>
+            <td class="p-3">${l.ai_estimated_minutes}分</td>
+            <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
+            <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+  </script>
+</body>
+</html>
