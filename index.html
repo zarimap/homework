@@ -27,17 +27,31 @@
     </header>
 
     <div class="p-6">
-      <section id="sec-auth" class="max-w-md mx-auto space-y-4 py-8">
-        <h2 class="text-xl font-bold text-center text-slate-700">ログイン</h2>
-        <div>
-          <label class="block text-sm font-medium mb-1">メールアドレス (ID)</label>
-          <input type="email" id="auth-email" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="example@email.com">
+      <section id="sec-auth" class="max-w-md mx-auto space-y-6 py-6">
+        
+        <div class="flex border-b border-slate-200">
+          <button id="tab-auth-login" onclick="switchAuthMode('login')" class="flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600">ログイン</button>
+          <button id="tab-auth-signup" onclick="switchAuthMode('signup')" class="flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700">新規ユーザー登録</button>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">パスワード</label>
-          <input type="password" id="auth-password" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••••">
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">メールアドレス (ID)</label>
+            <input type="email" id="auth-email" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="example@email.com">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">パスワード</label>
+            <input type="password" id="auth-password" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="6文字以上">
+          </div>
+
+          <button id="btn-auth-login" onclick="handleLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-3 rounded-lg shadow-md transition">
+            ログイン
+          </button>
+
+          <button id="btn-auth-signup" onclick="handleSignUp()" class="hidden w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg shadow-md transition">
+            アカウントを作成する
+          </button>
         </div>
-        <button onclick="handleLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-3 rounded-lg shadow-md transition">ログイン</button>
       </section>
 
       <div id="sec-app" class="hidden space-y-8">
@@ -129,8 +143,8 @@
     import { GoogleGenAI } from '@google/genai';
 
     // --- Supabaseの設定 ---
-    const SUPABASE_URL = 'https://widujrxsvoqjadbjpyvf.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_vn1971MuJesbrHfD9Irtmw_3xem2V-h';
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
     // --- Gemini API Key ---
     // GitHub Actionsによるデプロイ時に Secrets (GEMINI_API_KEY) に自動置換されます
@@ -151,10 +165,35 @@
       }
     });
 
-    // ログイン
+    // 認証モード（ログイン / 新規登録）切り替え
+    window.switchAuthMode = (mode) => {
+      const tabLogin = document.getElementById('tab-auth-login');
+      const tabSignUp = document.getElementById('tab-auth-signup');
+      const btnLogin = document.getElementById('btn-auth-login');
+      const btnSignUp = document.getElementById('btn-auth-signup');
+
+      if (mode === 'login') {
+        tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600";
+        tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        btnLogin.classList.remove('hidden');
+        btnSignUp.classList.add('hidden');
+      } else {
+        tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600";
+        tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        btnSignUp.classList.remove('hidden');
+        btnLogin.classList.add('hidden');
+      }
+    };
+
+    // ログイン処理
     window.handleLogin = async () => {
       const email = document.getElementById('auth-email').value;
       const password = document.getElementById('auth-password').value;
+
+      if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください。');
+        return;
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
@@ -162,6 +201,38 @@
       } else {
         currentUser = data.user;
         showApp();
+      }
+    };
+
+    // 新規ユーザー登録処理
+    window.handleSignUp = async () => {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+
+      if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      if (password.length < 6) {
+        alert('パスワードは6文字以上で設定してください。');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      
+      if (error) {
+        alert('登録失敗: ' + error.message);
+      } else {
+        alert('アカウント作成が完了しました！');
+        currentUser = data.user;
+        if (currentUser) {
+          showApp();
+        } else {
+          // メール確認が必要なSupabase設定の場合の案内
+          alert('確認メールを送信しました。メールのリンクをクリックしてログインしてください。');
+          switchAuthMode('login');
+        }
       }
     };
 
@@ -182,7 +253,7 @@
       loadParentDashboard();
     }
 
-    // タブ切り替え
+    // タブ切り替え（子ども / 保護者）
     window.switchRole = (role) => {
       const childTab = document.getElementById('tab-child');
       const parentTab = document.getElementById('tab-parent');
@@ -294,7 +365,7 @@
 
       } catch (err) {
         alert('エラーが発生しました: ' + err.message);
-      } fontly {
+      } finally {
         btn.disabled = false;
         btn.innerText = 'AIで判定して記録を保存';
       }
@@ -307,18 +378,15 @@
 
       const daysName = ['日', '月', '火', '水', '木', '金', '土'];
       
-      // 今週の日曜日の00:00:00を取得
       const now = new Date();
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
       startOfWeek.setHours(0, 0, 0, 0);
 
-      // 土曜日の23:59:59
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
 
-      // 今週のログを取得
       const { data: logs } = await supabase
         .from('study_logs')
         .select('*')
@@ -330,7 +398,6 @@
         const targetDate = new Date(startOfWeek);
         targetDate.setDate(startOfWeek.getDate() + i);
 
-        // 該当日のログを抽出
         const dayLogs = (logs || []).filter(l => {
           const d = new Date(l.created_at);
           return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
@@ -379,7 +446,6 @@
       let dataValues = [];
 
       if (type === 'month') {
-        // 直近4週間の「週（日〜土）」単位集計
         labels = ['3週前', '2週前', '先週', '今週'];
         dataValues = [0, 0, 0, 0];
 
@@ -392,14 +458,13 @@
           const logDate = new Date(log.created_at);
           const diffDays = Math.floor((currentSun - logDate) / (1000 * 60 * 60 * 24));
           
-          if (diffDays <= 0 && diffDays > -7) dataValues[3] += log.final_calculated_minutes; // 今週
-          else if (diffDays > 0 && diffDays <= 7) dataValues[2] += log.final_calculated_minutes; // 先週
+          if (diffDays <= 0 && diffDays > -7) dataValues[3] += log.final_calculated_minutes;
+          else if (diffDays > 0 && diffDays <= 7) dataValues[2] += log.final_calculated_minutes;
           else if (diffDays > 7 && diffDays <= 14) dataValues[1] += log.final_calculated_minutes;
           else if (diffDays > 14 && diffDays <= 21) dataValues[0] += log.final_calculated_minutes;
         });
 
       } else {
-        // 過去12ヶ月（1年）の月単位集計
         labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
         dataValues = new Array(12).fill(0);
 
