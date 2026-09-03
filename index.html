@@ -138,430 +138,257 @@
   </div>
 
   <script>
-    // ===== グローバル状態管理 =====
-    let currentChart = null;
-    let currentUser = null;
-    let mockData = []; // ローカルデモ用データ
+  // ===== グローバル状態管理 =====
+  let currentChart = null;
+  let currentUser = null;
+  let mockData = []; // ローカルデモ用データ
 
-    // Supabase設定（実際の使用時に設定してください）
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
-    const USE_SUPABASE = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+  // Supabase設定
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const USE_SUPABASE = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY';
 
-    let supabase = null;
-    if (USE_SUPABASE) {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let supabase = null;
+  if (USE_SUPABASE && window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+
+  // ===== ユーティリティ関数 =====
+  function showNotification(message, type = 'info') {
+    const alertClass = {
+      'success': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      'error': 'bg-red-100 text-red-800 border-red-300',
+      'info': 'bg-blue-100 text-blue-800 border-blue-300'
+    }[type] || 'bg-blue-100 text-blue-800 border-blue-300';
+
+    const div = document.createElement('div');
+    div.className = `fixed top-4 right-4 p-4 rounded-lg border shadow-lg ${alertClass} z-50 max-w-sm`;
+    div.textContent = message;
+    document.body.appendChild(div);
+
+    setTimeout(() => div.remove(), 3000);
+  }
+
+  // ===== UI切り替え関数 =====
+  function switchAuthMode(mode) {
+    const tabLogin = document.getElementById('tab-auth-login');
+    const tabSignUp = document.getElementById('tab-auth-signup');
+    const btnLogin = document.getElementById('btn-auth-login');
+    const btnSignUp = document.getElementById('btn-auth-signup');
+
+    if (mode === 'login') {
+      tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600 transition cursor-pointer";
+      tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition cursor-pointer";
+      btnLogin.classList.remove('hidden');
+      btnSignUp.classList.add('hidden');
+    } else {
+      tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600 transition cursor-pointer";
+      tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition cursor-pointer";
+      btnSignUp.classList.remove('hidden');
+      btnLogin.classList.add('hidden');
+    }
+  }
+
+  function switchRole(role) {
+    const childTab = document.getElementById('tab-child');
+    const parentTab = document.getElementById('tab-parent');
+    const childView = document.getElementById('view-child');
+    const parentView = document.getElementById('view-parent');
+
+    if (role === 'child') {
+      childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition cursor-pointer";
+      parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition cursor-pointer";
+      childView.classList.remove('hidden');
+      parentView.classList.add('hidden');
+    } else {
+      parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition cursor-pointer";
+      childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition cursor-pointer";
+      parentView.classList.remove('hidden');
+      childView.classList.add('hidden');
+    }
+    loadParentDashboard();
+  }
+
+  function showApp() {
+    document.getElementById('sec-auth').classList.add('hidden');
+    document.getElementById('sec-app').classList.remove('hidden');
+    document.getElementById('btn-logout').classList.remove('hidden');
+    
+    loadWeeklyDetails();
+    renderChart('month');
+    loadParentDashboard();
+    showNotification('ログインしました！', 'success');
+  }
+
+  // ===== 認証処理 =====
+  async function handleLogin(e) {
+    if (e) e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+
+    if (!email || !password) {
+      showNotification('メールアドレスとパスワードを入力してください。', 'error');
+      return;
     }
 
-    // ===== ユーティリティ関数 =====
-    function showNotification(message, type = 'info') {
-      const alertClass = {
-        'success': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-        'error': 'bg-red-100 text-red-800 border-red-300',
-        'info': 'bg-blue-100 text-blue-800 border-blue-300'
-      }[type] || 'bg-blue-100 text-blue-800 border-blue-300';
-
-      const div = document.createElement('div');
-      div.className = `fixed top-4 right-4 p-4 rounded-lg border shadow-lg ${alertClass} z-50 max-w-sm`;
-      div.textContent = message;
-      document.body.appendChild(div);
-
-      setTimeout(() => div.remove(), 3000);
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // ===== 認証関連関数 =====
-    async function handleLogin() {
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
-
-      if (!email || !password) {
-        showNotification('メールアドレスとパスワードを入力してください。', 'error');
-        return;
-      }
-
-      if (!email.includes('@')) {
-        showNotification('有効なメールアドレスを入力してください。', 'error');
-        return;
-      }
-
-      try {
-        if (USE_SUPABASE) {
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-          currentUser = data.user;
-        } else {
-          // デモモード
-          currentUser = { id: 'demo-' + Date.now(), email: email };
-          showNotification('デモモードでログインしました（バックエンド未設定）', 'info');
-        }
-        showApp();
-      } catch (err) {
-        showNotification('ログイン失敗: ' + err.message, 'error');
-      }
-    }
-
-    async function handleSignUp() {
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
-
-      if (!email || !password) {
-        showNotification('メールアドレスとパスワードを入力してください。', 'error');
-        return;
-      }
-
-      if (!email.includes('@')) {
-        showNotification('有効なメールアドレスを入力してください。', 'error');
-        return;
-      }
-
-      if (password.length < 6) {
-        showNotification('パスワードは6文字以上で設定してください。', 'error');
-        return;
-      }
-
-      try {
-        if (USE_SUPABASE) {
-          const { data, error } = await supabase.auth.signUp({ email, password });
-          if (error) throw error;
-          currentUser = data.user;
-          showNotification('アカウント作成が完了しました！', 'success');
-        } else {
-          // デモモード
-          currentUser = { id: 'demo-' + Date.now(), email: email };
-          showNotification('デモモードでアカウントを作成しました（バックエンド未設定）', 'info');
-        }
-        showApp();
-      } catch (err) {
-        showNotification('登録失敗: ' + err.message, 'error');
-      }
-    }
-
-    async function handleLogout() {
-      if (USE_SUPABASE) {
-        await supabase.auth.signOut();
-      }
-      currentUser = null;
-      mockData = [];
-      location.reload();
-    }
-
-    // ===== UI切り替え関数 =====
-    function switchAuthMode(mode) {
-      const tabLogin = document.getElementById('tab-auth-login');
-      const tabSignUp = document.getElementById('tab-auth-signup');
-      const btnLogin = document.getElementById('btn-auth-login');
-      const btnSignUp = document.getElementById('btn-auth-signup');
-
-      if (mode === 'login') {
-        tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
-        tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
-        btnLogin.classList.remove('hidden');
-        btnSignUp.classList.add('hidden');
+    try {
+      if (USE_SUPABASE && supabase) {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        currentUser = data.user;
       } else {
-        tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600 transition";
-        tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
-        btnSignUp.classList.remove('hidden');
-        btnLogin.classList.add('hidden');
+        // デモモード動作
+        currentUser = { id: 'demo-user-1', email: email };
       }
+      showApp();
+    } catch (err) {
+      showNotification('ログイン失敗: ' + err.message, 'error');
+    }
+  }
+
+  async function handleSignUp(e) {
+    if (e) e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+
+    if (!email || !password) {
+      showNotification('メールアドレスとパスワードを入力してください。', 'error');
+      return;
     }
 
-    function switchRole(role) {
-      const childTab = document.getElementById('tab-child');
-      const parentTab = document.getElementById('tab-parent');
-      const childView = document.getElementById('view-child');
-      const parentView = document.getElementById('view-parent');
+    if (password.length < 6) {
+      showNotification('パスワードは6文字以上で設定してください。', 'error');
+      return;
+    }
 
-      if (role === 'child') {
-        childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
-        parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
-        childView.classList.remove('hidden');
-        parentView.classList.add('hidden');
+    try {
+      if (USE_SUPABASE && supabase) {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        currentUser = data.user;
       } else {
-        parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
-        childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
-        parentView.classList.remove('hidden');
-        childView.classList.add('hidden');
+        currentUser = { id: 'demo-user-1', email: email };
       }
-      loadParentDashboard();
+      showApp();
+    } catch (err) {
+      showNotification('登録失敗: ' + err.message, 'error');
     }
+  }
 
-    function showApp() {
-      document.getElementById('sec-auth').classList.add('hidden');
-      document.getElementById('sec-app').classList.remove('hidden');
-      document.getElementById('btn-logout').classList.remove('hidden');
-      document.getElementById('auth-status').classList.add('hidden');
-      
-      loadWeeklyDetails();
-      renderChart('month');
-      loadParentDashboard();
-      showNotification('ログインしました！', 'success');
+  async function handleLogout() {
+    if (USE_SUPABASE && supabase) {
+      await supabase.auth.signOut();
     }
+    currentUser = null;
+    mockData = [];
+    location.reload();
+  }
 
-    // ===== 勉強記録処理 =====
-    async function processStudySession() {
-      const fileInput = document.getElementById('photo-input');
-      const selfReported = parseInt(document.getElementById('self-time').value, 10);
+  // ===== 表示データ処理 =====
+  function loadWeeklyDetails() {
+    const grid = document.getElementById('weekly-details-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
 
-      if (!fileInput.files[0] || isNaN(selfReported) || selfReported <= 0) {
-        showNotification('写真の選択と正の整数の時間を入力してください。', 'error');
-        return;
-      }
+    const daysName = ['日', '月', '火', '水', '木', '金', '土'];
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
 
-      const btn = document.getElementById('btn-submit');
-      btn.disabled = true;
-      const originalText = btn.textContent;
-      btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span>AI解析中...';
+    for (let i = 0; i < 7; i++) {
+      const targetDate = new Date(startOfWeek);
+      targetDate.setDate(startOfWeek.getDate() + i);
 
-      try {
-        const file = fileInput.files[0];
-
-        // デモAI判定（簡易版）
-        const aiEstimated = Math.max(Math.floor(selfReported * 0.9), 5);
-        const finalCalculated = Math.floor((selfReported + aiEstimated) / 2);
-        const reason = '写真から判定可能な学習内容を確認しました。';
-
-        const imageUrl = URL.createObjectURL(file);
-
-        const newEntry = {
-          id: Date.now(),
-          user_id: currentUser.id,
-          created_at: new Date().toISOString(),
-          image_url: imageUrl,
-          self_reported_minutes: selfReported,
-          ai_estimated_minutes: aiEstimated,
-          final_calculated_minutes: finalCalculated,
-          ai_feedback: reason
-        };
-
-        mockData.push(newEntry);
-
-        document.getElementById('result-box').classList.remove('hidden');
-        document.getElementById('res-times').textContent = `自己申告: ${selfReported}分 | AI推定: ${aiEstimated}分 → 確定時間: ${finalCalculated}分`;
-        document.getElementById('res-reason').textContent = `判定理由: ${reason}`;
-
-        loadWeeklyDetails();
-        renderChart('month');
-        loadParentDashboard();
-
-        document.getElementById('self-time').value = '';
-        fileInput.value = '';
-
-        showNotification('記録を保存しました！', 'success');
-
-      } catch (err) {
-        showNotification('エラー: ' + err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-      }
-    }
-
-    // ===== データ表示関数 =====
-    async function loadWeeklyDetails() {
-      const grid = document.getElementById('weekly-details-grid');
-      grid.innerHTML = '';
-
-      const daysName = ['日', '月', '火', '水', '木', '金', '土'];
-      
-      const now = new Date();
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-
-      const logs = mockData.filter(l => {
+      const dayLogs = mockData.filter(l => {
         const d = new Date(l.created_at);
-        return d >= startOfWeek && d <= endOfWeek && l.user_id === currentUser.id;
+        return d.getDate() === targetDate.getDate() && currentUser && l.user_id === currentUser.id;
       });
 
-      for (let i = 0; i < 7; i++) {
-        const targetDate = new Date(startOfWeek);
-        targetDate.setDate(startOfWeek.getDate() + i);
+      const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
 
-        const dayLogs = logs.filter(l => {
-          const d = new Date(l.created_at);
-          return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
-        });
+      const card = document.createElement('div');
+      card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm";
+      card.innerHTML = `
+        <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
+          <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
+          <span class="text-indigo-600">${totalMinutes}分</span>
+        </div>
+        <div class="text-xs text-center text-slate-400 py-2">
+          ${dayLogs.length > 0 ? `${dayLogs.length}件の記録` : '記録なし'}
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+  }
 
-        const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
+  function loadParentDashboard() {
+    const container = document.getElementById('parent-history-list');
+    if (!container) return;
 
-        const card = document.createElement('div');
-        card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm hover:shadow-md transition";
-        
-        const photosHtml = dayLogs.map(l => `<img src="${l.image_url}" class="w-full h-12 object-cover rounded shadow-inner" alt="勉強ノート" />`).join('');
-
-        card.innerHTML = `
-          <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
-            <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
-            <span class="text-indigo-600">${totalMinutes}分</span>
-          </div>
-          <div class="grid grid-cols-2 gap-1 my-1">
-            ${photosHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center py-2">記録なし</p>'}
-          </div>
-        `;
-        grid.appendChild(card);
-      }
+    if (!currentUser || mockData.length === 0) {
+      container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
+      return;
     }
 
-    async function loadParentDashboard() {
-      const container = document.getElementById('parent-history-list');
-      const userLogs = mockData.filter(l => l.user_id === currentUser.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const userLogs = mockData.filter(l => l.user_id === currentUser.id);
+    container.innerHTML = userLogs.map(l => `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-3 text-xs">${new Date(l.created_at).toLocaleString('ja-JP')}</td>
+        <td class="p-3"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded" /></td>
+        <td class="p-3">${l.self_reported_minutes}分</td>
+        <td class="p-3">${l.ai_estimated_minutes}分</td>
+        <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
+        <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
+      </tr>
+    `).join('');
+  }
 
-      if (userLogs.length === 0) {
-        container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
-        return;
-      }
+  function renderChart(type) {
+    const chartEl = document.getElementById('studyChart');
+    if (!chartEl) return;
+    const ctx = chartEl.getContext('2d');
 
-      container.innerHTML = userLogs.map(l => {
-        const d = new Date(l.created_at).toLocaleString('ja-JP');
-        return `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 text-xs">${d}</td>
-            <td class="p-3"><a href="${l.image_url}" target="_blank" rel="noopener noreferrer"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded border cursor-pointer hover:opacity-75 transition" alt="勉強ノート" /></a></td>
-            <td class="p-3">${l.self_reported_minutes}分</td>
-            <td class="p-3">${l.ai_estimated_minutes}分</td>
-            <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
-            <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
-          </tr>
-        `;
-      }).join('');
-    }
+    if (currentChart) currentChart.destroy();
 
-    // ===== グラフ描画 =====
-    async function renderChart(type) {
-      const monthBtn = document.getElementById('btn-chart-month');
-      const yearBtn = document.getElementById('btn-chart-year');
-
-      if (type === 'month') {
-        monthBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md cursor-pointer";
-        yearBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer hover:bg-slate-300";
-      } else {
-        yearBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md cursor-pointer";
-        monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer hover:bg-slate-300";
-      }
-
-      const userLogs = mockData.filter(l => l.user_id === currentUser.id);
-      let labels = [];
-      let dataValues = [];
-
-      if (type === 'month') {
-        labels = ['3週前', '2週前', '先週', '今週'];
-        dataValues = [0, 0, 0, 0];
-
-        const now = new Date();
-        const currentSun = new Date(now);
-        currentSun.setDate(now.getDate() - now.getDay());
-        currentSun.setHours(0,0,0,0);
-
-        userLogs.forEach(log => {
-          const logDate = new Date(log.created_at);
-          const diffDays = Math.floor((currentSun - logDate) / (1000 * 60 * 60 * 24));
-          
-          if (diffDays <= 0 && diffDays > -7) dataValues[3] += log.final_calculated_minutes;
-          else if (diffDays > 0 && diffDays <= 7) dataValues[2] += log.final_calculated_minutes;
-          else if (diffDays > 7 && diffDays <= 14) dataValues[1] += log.final_calculated_minutes;
-          else if (diffDays > 14 && diffDays <= 21) dataValues[0] += log.final_calculated_minutes;
-        });
-
-      } else {
-        labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-        dataValues = new Array(12).fill(0);
-
-        userLogs.forEach(log => {
-          const m = new Date(log.created_at).getMonth();
-          dataValues[m] += log.final_calculated_minutes;
-        });
-      }
-
-      if (currentChart) currentChart.destroy();
-
-      const ctx = document.getElementById('studyChart').getContext('2d');
-      currentChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: '勉強時間 (分)',
-            data: dataValues,
-            backgroundColor: 'rgba(79, 70, 229, 0.7)',
-            borderColor: 'rgb(79, 70, 229)',
-            borderWidth: 1,
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: { 
-              beginAtZero: true,
-              ticks: { stepSize: 60 }
-            }
-          },
-          plugins: {
-            legend: {
-              labels: { font: { size: 12 } }
-            }
-          }
-        }
-      });
-    }
-
-    // ===== イベントリスナー設定 =====
-    document.addEventListener('DOMContentLoaded', async () => {
-      // 認証タブ
-      document.getElementById('tab-auth-login').addEventListener('click', () => switchAuthMode('login'));
-      document.getElementById('tab-auth-signup').addEventListener('click', () => switchAuthMode('signup'));
-
-      // ログイン/新規登録ボタン
-      document.getElementById('btn-auth-login').addEventListener('click', handleLogin);
-      document.getElementById('btn-auth-signup').addEventListener('click', handleSignUp);
-
-      // ログアウトボタン
-      document.getElementById('btn-logout').addEventListener('click', handleLogout);
-
-      // 子ども/保護者タブ
-      document.getElementById('tab-child').addEventListener('click', () => switchRole('child'));
-      document.getElementById('tab-parent').addEventListener('click', () => switchRole('parent'));
-
-      // 勉強記録ボタン
-      document.getElementById('btn-submit').addEventListener('click', processStudySession);
-
-      // チャートボタン
-      document.getElementById('btn-chart-month').addEventListener('click', () => renderChart('month'));
-      document.getElementById('btn-chart-year').addEventListener('click', () => renderChart('year'));
-
-      // Enterキーでログイン
-      document.getElementById('auth-password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          document.getElementById('btn-auth-login').click();
-        }
-      });
-
-      // セッションチェック
-      if (USE_SUPABASE) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          currentUser = session.user;
-          showApp();
-        }
-      } else {
-        // デモモード表示
-        document.getElementById('auth-status').classList.remove('hidden');
-      }
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: type === 'month' ? ['3週前', '2週前', '先週', '今週'] : ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+        datasets: [{
+          label: '勉強時間 (分)',
+          data: type === 'month' ? [0, 0, 0, 0] : new Array(12).fill(0),
+          backgroundColor: 'rgba(79, 70, 229, 0.7)',
+          borderRadius: 6
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
     });
-  </script>
+  }
+
+  // ===== 初期化処理 =====
+  document.addEventListener('DOMContentLoaded', () => {
+    // タブ切り替えの初期表示を設定
+    switchAuthMode('login');
+
+    // イベントリスナーの登録
+    document.getElementById('tab-auth-login').addEventListener('click', () => switchAuthMode('login'));
+    document.getElementById('tab-auth-signup').addEventListener('click', () => switchAuthMode('signup'));
+
+    document.getElementById('btn-auth-login').addEventListener('click', handleLogin);
+    document.getElementById('btn-auth-signup').addEventListener('click', handleSignUp);
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+    document.getElementById('tab-child').addEventListener('click', () => switchRole('child'));
+    document.getElementById('tab-parent').addEventListener('click', () => switchRole('parent'));
+
+    document.getElementById('btn-chart-month').addEventListener('click', () => renderChart('month'));
+    document.getElementById('btn-chart-year').addEventListener('click', () => renderChart('year'));
+
+    // Enterキー入力対応
+    document.getElementById('auth-password').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleLogin(e);
+    });
+  });
+</script>
 </body>
 </html>
