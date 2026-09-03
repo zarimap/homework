@@ -114,4 +114,419 @@
         <div id="view-parent" class="hidden space-y-6">
           <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h3 class="text-lg font-bold text-slate-800 mb-2">保護者確認ダッシュボード</h3>
-            <p class="text-xs text-slate-500">お子様がアップロード
+            <p class="text-xs text-slate-500">お子様がアップロードした写真と自己申告、およびAIが最終決定した時間の全履歴を確認できます。</p>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-sm text-slate-600">
+              <thead class="bg-slate-100 text-xs text-slate-700 uppercase">
+                <tr>
+                  <th class="p-3">日時</th>
+                  <th class="p-3">写真</th>
+                  <th class="p-3">自己申告</th>
+                  <th class="p-3">AI推定</th>
+                  <th class="p-3">確定時間</th>
+                  <th class="p-3">AIのコメント</th>
+                </tr>
+              </thead>
+              <tbody id="parent-history-list" class="divide-y divide-slate-200">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenAI } from '@google/genai';
+
+    // --- Supabaseの設定 ---
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    // --- Gemini API Key ---
+    const GEMINI_API_KEY = 'GEMINI_API_KEY_PLACEHOLDER';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    let currentChart = null;
+    let currentUser = null;
+
+    // --- グローバル空間 (window) に関数を明示的に割り当て ---
+
+    // 認証モード（ログイン / 新規登録）切り替え
+    window.switchAuthMode = (mode) => {
+      const tabLogin = document.getElementById('tab-auth-login');
+      const tabSignUp = document.getElementById('tab-auth-signup');
+      const btnLogin = document.getElementById('btn-auth-login');
+      const btnSignUp = document.getElementById('btn-auth-signup');
+
+      if (mode === 'login') {
+        tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600";
+        tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        btnLogin.classList.remove('hidden');
+        btnSignUp.classList.add('hidden');
+      } else {
+        tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600";
+        tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        btnSignUp.classList.remove('hidden');
+        btnLogin.classList.add('hidden');
+      }
+    };
+
+    // ログイン処理
+    window.handleLogin = async () => {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+
+      if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        alert('ログイン失敗: ' + error.message);
+      } else {
+        currentUser = data.user;
+        showApp();
+      }
+    };
+
+    // 新規ユーザー登録処理
+    window.handleSignUp = async () => {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+
+      if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      if (password.length < 6) {
+        alert('パスワードは6文字以上で設定してください。');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      
+      if (error) {
+        alert('登録失敗: ' + error.message);
+      } else {
+        currentUser = data.user;
+        if (currentUser) {
+          alert('アカウント作成が完了しました！');
+          showApp();
+        } else {
+          alert('確認メールを送信しました。メールのリンクをクリックしてログインしてください。');
+          window.switchAuthMode('login');
+        }
+      }
+    };
+
+    // ログアウト
+    window.handleLogout = async () => {
+      await supabase.auth.signOut();
+      location.reload();
+    };
+
+    // タブ切り替え（子ども / 保護者）
+    window.switchRole = (role) => {
+      const childTab = document.getElementById('tab-child');
+      const parentTab = document.getElementById('tab-parent');
+      const childView = document.getElementById('view-child');
+      const parentView = document.getElementById('view-parent');
+
+      if (role === 'child') {
+        childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
+        parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        childView.classList.remove('hidden');
+        parentView.classList.add('hidden');
+      } else {
+        parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
+        childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        parentView.classList.remove('hidden');
+        childView.classList.add('hidden');
+      }
+    };
+
+    // AI処理と保存
+    window.processStudySession = async () => {
+      const fileInput = document.getElementById('photo-input');
+      const selfReported = parseInt(document.getElementById('self-time').value, 10);
+
+      if (!fileInput.files[0] || isNaN(selfReported)) {
+        alert('写真の選択と自己申告時間を正しく入力してください。');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.innerText = 'AI解析中...';
+
+      try {
+        const file = fileInput.files[0];
+
+        const filePath = `${currentUser.id}/${Date.now()}_${file.name}`;
+        const { error: uploadErr } = await supabase.storage.from('study-photos').upload(filePath, file);
+        if (uploadErr) throw uploadErr;
+
+        const { data: { publicUrl } } = supabase.storage.from('study-photos').getPublicUrl(filePath);
+
+        const { data: pastLogs } = await supabase
+          .from('study_logs')
+          .select('self_reported_minutes, ai_estimated_minutes, final_calculated_minutes')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const historyContext = pastLogs && pastLogs.length > 0 ? JSON.stringify(pastLogs) : '過去履歴なし';
+        const base64Data = await fileToBase64(file);
+
+        const prompt = `
+          あなたは学習時間判定AIです。提供されたノート・教材画像の内容（書き込み量、文字数、問題数等）と、自己申告時間をもとに、適切な勉強時間を算出してください。
+          
+          【本人の過去傾向（自己申告値, AI推定値, 確定値）】:
+          ${historyContext}
+          
+          【今回の入力】:
+          - 自己申告時間: ${selfReported}分
+          
+          【指示】:
+          1. 画像から推定される勉強時間 (ai_estimated) を算出してください。
+          2. 過去の傾向と自己申告の偏りを評価し、最終的な正確な勉強時間 (final_calculated) を提示してください。
+          3. 出力は以下のJSON形式のみで返してください。
+
+          {"ai_estimated": 数値, "final_calculated": 数値, "reason": "根拠（50文字以内）"}
+        `;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            prompt,
+            { inlineData: { mimeType: file.type, data: base64Data } }
+          ],
+          config: { responseMimeType: 'application/json' }
+        });
+
+        const res = JSON.parse(response.text);
+
+        await supabase.from('study_logs').insert({
+          user_id: currentUser.id,
+          image_url: publicUrl,
+          self_reported_minutes: selfReported,
+          ai_estimated_minutes: res.ai_estimated,
+          final_calculated_minutes: res.final_calculated,
+          ai_feedback: res.reason
+        });
+
+        document.getElementById('result-box').classList.remove('hidden');
+        document.getElementById('res-times').innerText = `自己申告: ${selfReported}分 | AI推定: ${res.ai_estimated}分 → 確定時間: ${res.final_calculated}分`;
+        document.getElementById('res-reason').innerText = `判定理由: ${res.reason}`;
+
+        loadWeeklyDetails();
+        renderChart('month');
+        loadParentDashboard();
+
+        document.getElementById('self-time').value = '';
+        fileInput.value = '';
+
+      } catch (err) {
+        alert('エラーが発生しました: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'AIで判定して記録を保存';
+      }
+    };
+
+    // Chart.js描画
+    window.renderChart = async (type) => {
+      const monthBtn = document.getElementById('btn-chart-month');
+      const yearBtn = document.getElementById('btn-chart-year');
+
+      if (type === 'month') {
+        monthBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
+        yearBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+      } else {
+        yearBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
+        monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+      }
+
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: true });
+
+      let labels = [];
+      let dataValues = [];
+
+      if (type === 'month') {
+        labels = ['3週前', '2週前', '先週', '今週'];
+        dataValues = [0, 0, 0, 0];
+
+        const now = new Date();
+        const currentSun = new Date(now);
+        currentSun.setDate(now.getDate() - now.getDay());
+        currentSun.setHours(0,0,0,0);
+
+        (logs || []).forEach(log => {
+          const logDate = new Date(log.created_at);
+          const diffDays = Math.floor((currentSun - logDate) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 0 && diffDays > -7) dataValues[3] += log.final_calculated_minutes;
+          else if (diffDays > 0 && diffDays <= 7) dataValues[2] += log.final_calculated_minutes;
+          else if (diffDays > 7 && diffDays <= 14) dataValues[1] += log.final_calculated_minutes;
+          else if (diffDays > 14 && diffDays <= 21) dataValues[0] += log.final_calculated_minutes;
+        });
+
+      } else {
+        labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+        dataValues = new Array(12).fill(0);
+
+        (logs || []).forEach(log => {
+          const m = new Date(log.created_at).getMonth();
+          dataValues[m] += log.final_calculated_minutes;
+        });
+      }
+
+      if (currentChart) currentChart.destroy();
+
+      const ctx = document.getElementById('studyChart').getContext('2d');
+      currentChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '勉強時間 (分)',
+            data: dataValues,
+            backgroundColor: 'rgba(79, 70, 229, 0.7)',
+            borderColor: 'rgb(79, 70, 229)',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: '分' } }
+          }
+        }
+      });
+    };
+
+    // 内部関数
+    function showApp() {
+      document.getElementById('sec-auth').classList.add('hidden');
+      document.getElementById('sec-app').classList.remove('hidden');
+      document.getElementById('btn-logout').classList.remove('hidden');
+      
+      loadWeeklyDetails();
+      window.renderChart('month');
+      loadParentDashboard();
+    }
+
+    async function loadWeeklyDetails() {
+      const grid = document.getElementById('weekly-details-grid');
+      grid.innerHTML = '';
+
+      const daysName = ['日', '月', '火', '水', '木', '金', '土'];
+      
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', startOfWeek.toISOString())
+        .lte('created_at', endOfWeek.toISOString());
+
+      for (let i = 0; i < 7; i++) {
+        const targetDate = new Date(startOfWeek);
+        targetDate.setDate(startOfWeek.getDate() + i);
+
+        const dayLogs = (logs || []).filter(l => {
+          const d = new Date(l.created_at);
+          return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
+        });
+
+        const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm";
+        
+        let photosHtml = dayLogs.map(l => `<img src="${l.image_url}" class="w-full h-12 object-cover rounded shadow-inner" />`).join('');
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
+            <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
+            <span class="text-indigo-600">${totalMinutes}分</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 my-1">
+            ${photosHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center py-2">記録なし</p>'}
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    async function loadParentDashboard() {
+      const container = document.getElementById('parent-history-list');
+      
+      const { data: logs } = await supabase
+        .from('study_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (!logs || logs.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = logs.map(l => {
+        const d = new Date(l.created_at).toLocaleString('ja-JP');
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 text-xs">${d}</td>
+            <td class="p-3"><a href="${l.image_url}" target="_blank"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded border" /></a></td>
+            <td class="p-3">${l.self_reported_minutes}分</td>
+            <td class="p-3">${l.ai_estimated_minutes}分</td>
+            <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
+            <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 初期起動時のセッションチェック
+    window.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        showApp();
+      }
+    });
+  </script>
+</body>
+</html>
