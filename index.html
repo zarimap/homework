@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI勉強時間管理アプリ</title>
+  <title>【デバッグ版】AI勉強時間管理アプリ</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,20 +15,39 @@
     }
   </script>
 </head>
-<body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
+<body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6 pb-64">
   <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
     
     <header class="bg-indigo-600 text-white p-6 flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold">AI勉強時間記録アプリ</h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-2xl font-bold">AI勉強時間記録アプリ</h1>
+          <span class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">DEBUG MODE</span>
+        </div>
         <p class="text-indigo-200 text-sm mt-1">写真とAIで正しく勉強時間を可視化</p>
       </div>
       <button id="btn-logout" class="hidden bg-indigo-700 hover:bg-indigo-800 text-xs px-3 py-2 rounded-lg transition">ログアウト</button>
     </header>
 
     <div class="p-6">
+      <!-- 接続状況診断バー -->
+      <div id="debug-status-bar" class="mb-6 p-4 rounded-xl text-xs bg-slate-100 border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div class="flex items-center gap-2">
+          <span class="font-bold">Supabase接続:</span>
+          <span id="st-supabase" class="text-amber-600 font-semibold">未検証</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold">ネットワーク環境:</span>
+          <span id="st-network" class="text-emerald-600 font-semibold">ONLINE</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold">現在ログイン:</span>
+          <span id="st-user" class="text-slate-500 font-semibold">未ログイン</span>
+        </div>
+      </div>
+
       <!-- 認証エリア（ログイン / 新規登録） -->
-      <section id="sec-auth" class="max-w-md mx-auto space-y-6 py-6">
+      <section id="sec-auth" class="max-w-md mx-auto space-y-6 py-2">
         
         <!-- モード切り替えタブ -->
         <div class="flex border-b border-slate-200">
@@ -144,8 +163,53 @@
     </div>
   </div>
 
+  <!-- 固定表示デバッグコンソールバー -->
+  <div class="fixed bottom-0 left-0 right-0 h-56 bg-slate-900 text-slate-100 font-mono text-xs z-50 border-t-2 border-indigo-500 flex flex-col shadow-2xl">
+    <div class="bg-slate-800 px-4 py-2 flex justify-between items-center border-b border-slate-700">
+      <span class="font-bold text-indigo-400 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        リアルタイム・デバッグログコンソール
+      </span>
+      <div class="flex gap-2">
+        <button id="btn-test-ping" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 rounded text-white text-[10px]">Supabase通信テスト</button>
+        <button id="btn-clear-log" class="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 text-[10px]">クリア</button>
+      </div>
+    </div>
+    <div id="debug-log-container" class="p-3 overflow-y-auto flex-1 space-y-1">
+      <div class="text-slate-500">[System] デバッグモニタを開始しました...</div>
+    </div>
+  </div>
+
   <script type="module">
     import { GoogleGenAI } from '@google/genai';
+
+    // --- デバッグログ出力ロジック ---
+    function log(type, message, details = null) {
+      const container = document.getElementById('debug-log-container');
+      if (!container) return;
+
+      const time = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      line.className = "leading-relaxed border-b border-slate-800/50 pb-0.5";
+
+      let colorClass = "text-slate-300";
+      if (type === 'SUCCESS') colorClass = "text-emerald-400 font-semibold";
+      if (type === 'WARN') colorClass = "text-amber-400 font-semibold";
+      if (type === 'ERROR') colorClass = "text-rose-400 font-bold";
+      if (type === 'INFO') colorClass = "text-sky-400";
+
+      let text = `<span class="text-slate-500">[${time}]</span> <span class="${colorClass}">[${type}]</span> ${message}`;
+      if (details) {
+        text += `<pre class="mt-1 p-1 bg-slate-950 text-slate-400 rounded text-[10px] overflow-x-auto">${typeof details === 'object' ? JSON.stringify(details, null, 2) : details}</pre>`;
+      }
+
+      line.innerHTML = text;
+      container.appendChild(line);
+      container.scrollTop = container.scrollHeight;
+
+      if (type === 'ERROR') console.error(`[${type}] ${message}`, details || '');
+      else console.log(`[${type}] ${message}`, details || '');
+    }
 
     // --- 設定値 ---
     const SUPABASE_URL = 'https://widujrxsvoqjadbjpyvf.supabase.co';
@@ -157,8 +221,9 @@
     let currentChart = null;
     let currentUser = null;
 
-    // --- 1. UIの切り替え（Supabaseの接続状態に関わらず必ず動作） ---
+    // --- 1. UIの切り替え ---
     function switchAuthMode(mode) {
+      log('INFO', `認証モード切り替え: ${mode}`);
       const tabLogin = document.getElementById('tab-auth-login');
       const tabSignUp = document.getElementById('tab-auth-signup');
       const btnLogin = document.getElementById('btn-auth-login');
@@ -178,6 +243,7 @@
     }
 
     function switchRole(role) {
+      log('INFO', `表示ロール切り替え: ${role}`);
       const childTab = document.getElementById('tab-child');
       const parentTab = document.getElementById('tab-parent');
       const childView = document.getElementById('view-child');
@@ -196,36 +262,68 @@
       }
     }
 
-    // --- 2. クライアントの安全な初期化 ---
+    // --- 2. クライアントの初期化と疎通確認 ---
     function initClients() {
+      log('INFO', 'クライアント初期化チェック中...');
+
       if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL' || !SUPABASE_KEY || SUPABASE_KEY === 'YOUR_SUPABASE_ANON_KEY') {
-        alert('【設定未完了エラー】\nSupabaseのURLおよびAPI Keyが初期値（YOUR_SUPABASE_URL）のままです。\n\nHTMLファイル内の SUPABASE_URL と SUPABASE_KEY に正しい値を設定してください。');
+        log('ERROR', 'SupabaseのURLまたはKeyがプレースホルダーのままです。');
+        document.getElementById('st-supabase').innerText = '設定未入力';
+        document.getElementById('st-supabase').className = 'text-rose-600 font-bold';
         return false;
       }
 
       try {
         if (!supabase) {
           supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          log('SUCCESS', 'Supabaseクライアントインスタンスを生成しました。');
         }
         if (!ai) {
           ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+          log('SUCCESS', 'GoogleGenAIクライアントインスタンスを生成しました。');
         }
         return true;
       } catch (err) {
-        console.error('クライアント初期化エラー:', err);
-        alert('Supabase初期化エラー: ' + err.message);
+        log('ERROR', 'クライアント初期化例外:', err);
         return false;
+      }
+    }
+
+    async function testSupabaseConnection() {
+      log('INFO', 'Supabase サーバーへ Ping リクエストを送信中...');
+      if (!initClients()) return;
+
+      try {
+        const start = Date.now();
+        const { data, error } = await supabase.from('study_logs').select('id').limit(1);
+        const duration = Date.now() - start;
+
+        if (error) {
+          log('ERROR', `Supabase接続エラー (応答時間: ${duration}ms): ${error.message}`, error);
+          document.getElementById('st-supabase').innerText = '接続失敗 (エラー)';
+          document.getElementById('st-supabase').className = 'text-rose-600 font-bold';
+        } else {
+          log('SUCCESS', `Supabase接続成功 (応答時間: ${duration}ms)`);
+          document.getElementById('st-supabase').innerText = `OK (${duration}ms)`;
+          document.getElementById('st-supabase').className = 'text-emerald-600 font-bold';
+        }
+      } catch (err) {
+        log('ERROR', 'ネットワーク接続・Fetch通信が完全に遮断された可能性:', err.message);
+        document.getElementById('st-supabase').innerText = '通信失敗 (FetchError)';
+        document.getElementById('st-supabase').className = 'text-rose-600 font-bold';
       }
     }
 
     // --- 3. 認証処理 ---
     async function handleLogin() {
+      log('INFO', 'ログイン処理を開始します...');
       if (!initClients()) return;
 
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value.trim();
 
       if (!email || !password) {
+        log('WARN', 'メールアドレスまたはパスワードが入力されていません。');
         alert('メールアドレスとパスワードを入力してください。');
         return;
       }
@@ -235,15 +333,22 @@
       btn.innerText = 'ログイン中...';
 
       try {
+        log('INFO', `ログイン要求送信中 (Email: ${email})`);
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        
         if (error) {
+          log('ERROR', `ログイン拒否: ${error.message}`, error);
           alert('ログイン失敗: ' + error.message);
         } else {
+          log('SUCCESS', `ログイン成功! User ID: ${data.user.id}`);
           currentUser = data.user;
+          document.getElementById('st-user').innerText = email;
+          document.getElementById('st-user').className = 'text-indigo-600 font-bold';
           showApp();
         }
       } catch (err) {
-        alert('通信エラーが発生しました: ' + err.message);
+        log('ERROR', 'ログイン要求時の通信例外 (TypeError/Fetch failed等):', err);
+        alert('通信エラーが発生しました:\n' + err.message + '\n\nデバッグログ画面を確認してください。');
       } finally {
         btn.disabled = false;
         btn.innerText = 'ログイン';
@@ -251,17 +356,20 @@
     }
 
     async function handleSignUp() {
+      log('INFO', '新規会員登録処理を開始します...');
       if (!initClients()) return;
 
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value.trim();
 
       if (!email || !password) {
+        log('WARN', '入力欄が空です。');
         alert('メールアドレスとパスワードを入力してください。');
         return;
       }
 
       if (password.length < 6) {
+        log('WARN', 'パスワード桁数不足');
         alert('パスワードは6文字以上で設定してください。');
         return;
       }
@@ -271,10 +379,14 @@
       btn.innerText = '登録中...';
 
       try {
+        log('INFO', `アカウント作成要求送信中 (Email: ${email})`);
         const { data, error } = await supabase.auth.signUp({ email, password });
+        
         if (error) {
+          log('ERROR', `新規登録失敗: ${error.message}`, error);
           alert('登録失敗: ' + error.message);
         } else {
+          log('SUCCESS', 'アカウント作成要求完了:', data);
           currentUser = data.user;
           if (currentUser) {
             alert('アカウント作成が完了しました！');
@@ -285,6 +397,7 @@
           }
         }
       } catch (err) {
+        log('ERROR', '新規登録時の通信例外:', err);
         alert('通信エラーが発生しました: ' + err.message);
       } finally {
         btn.disabled = false;
@@ -293,6 +406,7 @@
     }
 
     async function handleLogout() {
+      log('INFO', 'ログアウト実行中...');
       if (supabase) {
         await supabase.auth.signOut();
       }
@@ -300,6 +414,7 @@
     }
 
     function showApp() {
+      log('INFO', 'メインアプリ画面を表示します。');
       document.getElementById('sec-auth').classList.add('hidden');
       document.getElementById('sec-app').classList.remove('hidden');
       document.getElementById('btn-logout').classList.remove('hidden');
@@ -311,12 +426,14 @@
 
     // --- 4. AI処理と保存 ---
     async function processStudySession() {
+      log('INFO', 'AI解析および保存プロセスを開始...');
       if (!initClients()) return;
 
       const fileInput = document.getElementById('photo-input');
       const selfReported = parseInt(document.getElementById('self-time').value, 10);
 
       if (!fileInput.files[0] || isNaN(selfReported)) {
+        log('WARN', '画像または自己申告時間が未設定');
         alert('写真の選択と自己申告時間を正しく入力してください。');
         return;
       }
@@ -327,23 +444,35 @@
 
       try {
         const file = fileInput.files[0];
+        log('INFO', `ファイル選択確認: ${file.name} (${file.size} bytes)`);
 
         const filePath = `${currentUser.id}/${Date.now()}_${file.name}`;
+        log('INFO', `Supabase Storageへのファイルアップロード開始: ${filePath}`);
+        
         const { error: uploadErr } = await supabase.storage.from('study-photos').upload(filePath, file);
-        if (uploadErr) throw uploadErr;
+        if (uploadErr) {
+          log('ERROR', 'Storageアップロード失敗:', uploadErr);
+          throw uploadErr;
+        }
+        log('SUCCESS', 'Storageアップロード完了');
 
         const { data: { publicUrl } } = supabase.storage.from('study-photos').getPublicUrl(filePath);
+        log('INFO', `公開URL取得: ${publicUrl}`);
 
-        const { data: pastLogs } = await supabase
+        log('INFO', '過去ログ検索中...');
+        const { data: pastLogs, error: pastErr } = await supabase
           .from('study_logs')
           .select('self_reported_minutes, ai_estimated_minutes, final_calculated_minutes')
           .eq('user_id', currentUser.id)
           .order('created_at', { ascending: false })
           .limit(5);
 
+        if (pastErr) log('WARN', '過去ログ取得失敗(スキップします):', pastErr);
+
         const historyContext = pastLogs && pastLogs.length > 0 ? JSON.stringify(pastLogs) : '過去履歴なし';
         const base64Data = await fileToBase64(file);
 
+        log('INFO', 'Gemini API 呼び出し準備中...');
         const prompt = `
           あなたは学習時間判定AIです。提供されたノート・教材画像の内容（書き込み量、文字数、問題数等）と、自己申告時間をもとに、適切な勉強時間を算出してください。
           
@@ -370,9 +499,11 @@
           config: { responseMimeType: 'application/json' }
         });
 
+        log('SUCCESS', 'Gemini API から応答を受信:', response.text);
         const res = JSON.parse(response.text);
 
-        await supabase.from('study_logs').insert({
+        log('INFO', 'Database (study_logs) へのインサート実行中...');
+        const { error: dbErr } = await supabase.from('study_logs').insert({
           user_id: currentUser.id,
           image_url: publicUrl,
           self_reported_minutes: selfReported,
@@ -380,6 +511,13 @@
           final_calculated_minutes: res.final_calculated,
           ai_feedback: res.reason
         });
+
+        if (dbErr) {
+          log('ERROR', 'DB書き込み失敗:', dbErr);
+          throw dbErr;
+        }
+
+        log('SUCCESS', 'すべてのデータを正常に記録しました！');
 
         document.getElementById('result-box').classList.remove('hidden');
         document.getElementById('res-times').innerText = `自己申告: ${selfReported}分 | AI推定: ${res.ai_estimated}分 → 確定時間: ${res.final_calculated}分`;
@@ -393,7 +531,8 @@
         fileInput.value = '';
 
       } catch (err) {
-        alert('エラーが発生しました: ' + err.message);
+        log('ERROR', '処理中の例外が発生しました:', err);
+        alert('エラーが発生しました:\n' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerText = 'AIで判定して記録を保存';
@@ -403,6 +542,7 @@
     // --- 5. グラフ＆データ描画 ---
     async function renderChart(type) {
       if (!supabase || !currentUser) return;
+      log('INFO', `グラフ再描画処理: ${type}`);
 
       const monthBtn = document.getElementById('btn-chart-month');
       const yearBtn = document.getElementById('btn-chart-year');
@@ -415,11 +555,16 @@
         monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer";
       }
 
-      const { data: logs } = await supabase
+      const { data: logs, error } = await supabase
         .from('study_logs')
         .select('*')
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: true });
+
+      if (error) {
+        log('ERROR', 'グラフ用データ取得エラー:', error);
+        return;
+      }
 
       let labels = [];
       let dataValues = [];
@@ -481,11 +626,12 @@
 
     async function loadWeeklyDetails() {
       if (!supabase || !currentUser) return;
+      log('INFO', '週間詳細グリッド取得中...');
+
       const grid = document.getElementById('weekly-details-grid');
       grid.innerHTML = '';
 
       const daysName = ['日', '月', '火', '水', '木', '金', '土'];
-      
       const now = new Date();
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
@@ -495,12 +641,17 @@
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
 
-      const { data: logs } = await supabase
+      const { data: logs, error } = await supabase
         .from('study_logs')
         .select('*')
         .eq('user_id', currentUser.id)
         .gte('created_at', startOfWeek.toISOString())
         .lte('created_at', endOfWeek.toISOString());
+
+      if (error) {
+        log('ERROR', '週間データ読み込みエラー:', error);
+        return;
+      }
 
       for (let i = 0; i < 7; i++) {
         const targetDate = new Date(startOfWeek);
@@ -533,13 +684,20 @@
 
     async function loadParentDashboard() {
       if (!supabase || !currentUser) return;
+      log('INFO', '保護者ダッシュボードのデータ一覧を取得中...');
+
       const container = document.getElementById('parent-history-list');
       
-      const { data: logs } = await supabase
+      const { data: logs, error } = await supabase
         .from('study_logs')
         .select('*')
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false });
+
+      if (error) {
+        log('ERROR', '保護者ダッシュボードデータ取得エラー:', error);
+        return;
+      }
 
       if (!logs || logs.length === 0) {
         container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
@@ -570,8 +728,25 @@
       });
     }
 
+    // 全域の未解決例外を検出してデバッグ画面に流す
+    window.addEventListener('error', (evt) => {
+      log('ERROR', `JavaScript実行時エラー: ${evt.message} (${evt.filename}:${evt.lineno})`);
+    });
+
+    window.addEventListener('unhandledrejection', (evt) => {
+      log('ERROR', `非同期処理例外(Unhandled Rejection): ${evt.reason?.message || evt.reason}`);
+    });
+
     // --- 6. DOM読み込み完了時にイベントを一括アタッチ ---
     document.addEventListener('DOMContentLoaded', () => {
+      log('INFO', 'DOMの読み込みが完了しました。');
+
+      // デバッグコントロール
+      document.getElementById('btn-clear-log')?.addEventListener('click', () => {
+        document.getElementById('debug-log-container').innerHTML = '';
+      });
+      document.getElementById('btn-test-ping')?.addEventListener('click', testSupabaseConnection);
+
       // タブ切り替えイベント
       document.getElementById('tab-auth-login')?.addEventListener('click', () => switchAuthMode('login'));
       document.getElementById('tab-auth-signup')?.addEventListener('click', () => switchAuthMode('signup'));
@@ -586,14 +761,36 @@
       document.getElementById('btn-chart-month')?.addEventListener('click', () => renderChart('month'));
       document.getElementById('btn-chart-year')?.addEventListener('click', () => renderChart('year'));
 
-      // セッション自動判定（設定が正しければ実行）
+      // ネットワーク状態の監視
+      window.addEventListener('online', () => {
+        document.getElementById('st-network').innerText = 'ONLINE';
+        document.getElementById('st-network').className = 'text-emerald-600 font-semibold';
+        log('SUCCESS', 'ネットワークがONLINEに復帰しました');
+      });
+      window.addEventListener('offline', () => {
+        document.getElementById('st-network').innerText = 'OFFLINE';
+        document.getElementById('st-network').className = 'text-rose-600 font-bold';
+        log('ERROR', 'ネットワークが切断されました(OFFLINE)');
+      });
+
+      // 自動初期化とテスト
       if (initClients()) {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (session) {
-            currentUser = session.user;
-            showApp();
+        testSupabaseConnection();
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+          if (error) {
+            log('WARN', 'セッション取得エラー:', error);
+            return;
           }
-        }).catch(err => console.warn('セッション確認をスキップ:', err.message));
+          if (session) {
+            log('SUCCESS', `既存セッション検出 (User: ${session.user.email})`);
+            currentUser = session.user;
+            document.getElementById('st-user').innerText = session.user.email;
+            document.getElementById('st-user').className = 'text-indigo-600 font-bold';
+            showApp();
+          } else {
+            log('INFO', 'アクティブな既存セッションはありません。');
+          }
+        }).catch(err => log('WARN', 'セッション確認例外:', err));
       }
     });
   </script>
