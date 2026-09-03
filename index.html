@@ -7,13 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="importmap">
-    {
-      "imports": {
-        "@google/genai": "https://esm.run/@google/genai"
-      }
-    }
-  </script>
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 p-4 sm:p-6">
   <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -23,15 +16,15 @@
         <h1 class="text-2xl font-bold">AI勉強時間記録アプリ</h1>
         <p class="text-indigo-200 text-sm mt-1">写真とAIで正しく勉強時間を可視化</p>
       </div>
-      <button id="btn-logout" onclick="handleLogout()" class="hidden bg-indigo-700 hover:bg-indigo-800 text-xs px-3 py-2 rounded-lg transition">ログアウト</button>
+      <button id="btn-logout" class="hidden bg-indigo-700 hover:bg-indigo-800 text-xs px-3 py-2 rounded-lg transition cursor-pointer">ログアウト</button>
     </header>
 
     <div class="p-6">
       <section id="sec-auth" class="max-w-md mx-auto space-y-6 py-6">
         
         <div class="flex border-b border-slate-200">
-          <button id="tab-auth-login" onclick="switchAuthMode('login')" class="flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600">ログイン</button>
-          <button id="tab-auth-signup" onclick="switchAuthMode('signup')" class="flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700">新規ユーザー登録</button>
+          <button id="tab-auth-login" class="flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600 transition">ログイン</button>
+          <button id="tab-auth-signup" class="flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition">新規ユーザー登録</button>
         </div>
 
         <div class="space-y-4">
@@ -44,21 +37,25 @@
             <input type="password" id="auth-password" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="6文字以上">
           </div>
 
-          <button id="btn-auth-login" onclick="handleLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-3 rounded-lg shadow-md transition cursor-pointer">
+          <button id="btn-auth-login" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold p-3 rounded-lg shadow-md transition cursor-pointer">
             ログイン
           </button>
 
-          <button id="btn-auth-signup" onclick="handleSignUp()" class="hidden w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg shadow-md transition cursor-pointer">
+          <button id="btn-auth-signup" class="hidden w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold p-3 rounded-lg shadow-md transition cursor-pointer">
             アカウントを作成する
           </button>
+        </div>
+
+        <div id="auth-status" class="p-3 rounded-lg bg-blue-50 border border-blue-200 hidden">
+          <p class="text-sm text-blue-800">ℹ️ デモモード: 実際のバックエンド接続は、Supabase APIキーを設定してください</p>
         </div>
       </section>
 
       <div id="sec-app" class="hidden space-y-8">
         
         <div class="flex border-b border-slate-200">
-          <button id="tab-child" onclick="switchRole('child')" class="flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600">子ども用（記録・確認）</button>
-          <button id="tab-parent" onclick="switchRole('parent')" class="flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700">保護者用（ダッシュボード）</button>
+          <button id="tab-child" class="flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition">子ども用（記録・確認）</button>
+          <button id="tab-parent" class="flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition">保護者用（ダッシュボード）</button>
         </div>
 
         <div id="view-child" class="space-y-8">
@@ -72,10 +69,10 @@
 
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">自己申告の勉強時間 (分)</label>
-              <input type="number" id="self-time" placeholder="例: 45" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <input type="number" id="self-time" placeholder="例: 45" min="1" max="480" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
             </div>
 
-            <button id="btn-submit" onclick="processStudySession()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-lg shadow transition flex justify-center items-center gap-2">
+            <button id="btn-submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3 rounded-lg shadow transition flex justify-center items-center gap-2 cursor-pointer">
               <span>AIで判定して記録を保存</span>
             </button>
           </div>
@@ -101,8 +98,8 @@
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-bold text-slate-800">勉強時間の推移</h3>
               <div class="flex gap-2">
-                <button id="btn-chart-month" onclick="renderChart('month')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md">1ヶ月 (週別)</button>
-                <button id="btn-chart-year" onclick="renderChart('year')" class="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md">1年 (月別)</button>
+                <button id="btn-chart-month" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md cursor-pointer">1ヶ月 (週別)</button>
+                <button id="btn-chart-year" class="px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer hover:bg-slate-300">1年 (月別)</button>
               </div>
             </div>
             <div class="bg-white p-4 border rounded-xl shadow-sm">
@@ -130,6 +127,7 @@
                 </tr>
               </thead>
               <tbody id="parent-history-list" class="divide-y divide-slate-200">
+                <tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>
               </tbody>
             </table>
           </div>
@@ -139,193 +137,216 @@
     </div>
   </div>
 
-  <script type="module">
-    import { GoogleGenAI } from '@google/genai';
-
-    // --- Supabaseの設定 ---
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
-
-    // --- Gemini API Key ---
-    const GEMINI_API_KEY = 'GEMINI_API_KEY_PLACEHOLDER';
-
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
+  <script>
+    // ===== グローバル状態管理 =====
     let currentChart = null;
     let currentUser = null;
+    let mockData = []; // ローカルデモ用データ
 
-    // --- グローバル空間 (window) に関数を明示的に割り当て ---
+    // Supabase設定（実際の使用時に設定してください）
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const USE_SUPABASE = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY';
 
-    // 認証モード（ログイン / 新規登録）切り替え
-    window.switchAuthMode = (mode) => {
+    let supabase = null;
+    if (USE_SUPABASE) {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+
+    // ===== ユーティリティ関数 =====
+    function showNotification(message, type = 'info') {
+      const alertClass = {
+        'success': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        'error': 'bg-red-100 text-red-800 border-red-300',
+        'info': 'bg-blue-100 text-blue-800 border-blue-300'
+      }[type] || 'bg-blue-100 text-blue-800 border-blue-300';
+
+      const div = document.createElement('div');
+      div.className = `fixed top-4 right-4 p-4 rounded-lg border shadow-lg ${alertClass} z-50 max-w-sm`;
+      div.textContent = message;
+      document.body.appendChild(div);
+
+      setTimeout(() => div.remove(), 3000);
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ===== 認証関連関数 =====
+    async function handleLogin() {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+
+      if (!email || !password) {
+        showNotification('メールアドレスとパスワードを入力してください。', 'error');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        showNotification('有効なメールアドレスを入力してください。', 'error');
+        return;
+      }
+
+      try {
+        if (USE_SUPABASE) {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          currentUser = data.user;
+        } else {
+          // デモモード
+          currentUser = { id: 'demo-' + Date.now(), email: email };
+          showNotification('デモモードでログインしました（バックエンド未設定）', 'info');
+        }
+        showApp();
+      } catch (err) {
+        showNotification('ログイン失敗: ' + err.message, 'error');
+      }
+    }
+
+    async function handleSignUp() {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+
+      if (!email || !password) {
+        showNotification('メールアドレスとパスワードを入力してください。', 'error');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        showNotification('有効なメールアドレスを入力してください。', 'error');
+        return;
+      }
+
+      if (password.length < 6) {
+        showNotification('パスワードは6文字以上で設定してください。', 'error');
+        return;
+      }
+
+      try {
+        if (USE_SUPABASE) {
+          const { data, error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+          currentUser = data.user;
+          showNotification('アカウント作成が完了しました！', 'success');
+        } else {
+          // デモモード
+          currentUser = { id: 'demo-' + Date.now(), email: email };
+          showNotification('デモモードでアカウントを作成しました（バックエンド未設定）', 'info');
+        }
+        showApp();
+      } catch (err) {
+        showNotification('登録失敗: ' + err.message, 'error');
+      }
+    }
+
+    async function handleLogout() {
+      if (USE_SUPABASE) {
+        await supabase.auth.signOut();
+      }
+      currentUser = null;
+      mockData = [];
+      location.reload();
+    }
+
+    // ===== UI切り替え関数 =====
+    function switchAuthMode(mode) {
       const tabLogin = document.getElementById('tab-auth-login');
       const tabSignUp = document.getElementById('tab-auth-signup');
       const btnLogin = document.getElementById('btn-auth-login');
       const btnSignUp = document.getElementById('btn-auth-signup');
 
       if (mode === 'login') {
-        tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600";
-        tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        tabLogin.className = "flex-1 py-2 font-bold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
+        tabSignUp.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
         btnLogin.classList.remove('hidden');
         btnSignUp.classList.add('hidden');
       } else {
-        tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600";
-        tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        tabSignUp.className = "flex-1 py-2 font-bold text-center border-b-2 border-emerald-600 text-emerald-600 transition";
+        tabLogin.className = "flex-1 py-2 font-bold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
         btnSignUp.classList.remove('hidden');
         btnLogin.classList.add('hidden');
       }
-    };
+    }
 
-    // ログイン処理
-    window.handleLogin = async () => {
-      const email = document.getElementById('auth-email').value;
-      const password = document.getElementById('auth-password').value;
-
-      if (!email || !password) {
-        alert('メールアドレスとパスワードを入力してください。');
-        return;
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert('ログイン失敗: ' + error.message);
-      } else {
-        currentUser = data.user;
-        showApp();
-      }
-    };
-
-    // 新規ユーザー登録処理
-    window.handleSignUp = async () => {
-      const email = document.getElementById('auth-email').value;
-      const password = document.getElementById('auth-password').value;
-
-      if (!email || !password) {
-        alert('メールアドレスとパスワードを入力してください。');
-        return;
-      }
-
-      if (password.length < 6) {
-        alert('パスワードは6文字以上で設定してください。');
-        return;
-      }
-
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      
-      if (error) {
-        alert('登録失敗: ' + error.message);
-      } else {
-        currentUser = data.user;
-        if (currentUser) {
-          alert('アカウント作成が完了しました！');
-          showApp();
-        } else {
-          alert('確認メールを送信しました。メールのリンクをクリックしてログインしてください。');
-          window.switchAuthMode('login');
-        }
-      }
-    };
-
-    // ログアウト
-    window.handleLogout = async () => {
-      await supabase.auth.signOut();
-      location.reload();
-    };
-
-    // タブ切り替え（子ども / 保護者）
-    window.switchRole = (role) => {
+    function switchRole(role) {
       const childTab = document.getElementById('tab-child');
       const parentTab = document.getElementById('tab-parent');
       const childView = document.getElementById('view-child');
       const parentView = document.getElementById('view-parent');
 
       if (role === 'child') {
-        childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
-        parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        childTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
+        parentTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
         childView.classList.remove('hidden');
         parentView.classList.add('hidden');
       } else {
-        parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600";
-        childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700";
+        parentTab.className = "flex-1 py-3 font-semibold text-center border-b-2 border-indigo-600 text-indigo-600 transition";
+        childTab.className = "flex-1 py-3 font-semibold text-center text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition";
         parentView.classList.remove('hidden');
         childView.classList.add('hidden');
       }
-    };
+      loadParentDashboard();
+    }
 
-    // AI処理と保存
-    window.processStudySession = async () => {
+    function showApp() {
+      document.getElementById('sec-auth').classList.add('hidden');
+      document.getElementById('sec-app').classList.remove('hidden');
+      document.getElementById('btn-logout').classList.remove('hidden');
+      document.getElementById('auth-status').classList.add('hidden');
+      
+      loadWeeklyDetails();
+      renderChart('month');
+      loadParentDashboard();
+      showNotification('ログインしました！', 'success');
+    }
+
+    // ===== 勉強記録処理 =====
+    async function processStudySession() {
       const fileInput = document.getElementById('photo-input');
       const selfReported = parseInt(document.getElementById('self-time').value, 10);
 
-      if (!fileInput.files[0] || isNaN(selfReported)) {
-        alert('写真の選択と自己申告時間を正しく入力してください。');
+      if (!fileInput.files[0] || isNaN(selfReported) || selfReported <= 0) {
+        showNotification('写真の選択と正の整数の時間を入力してください。', 'error');
         return;
       }
 
       const btn = document.getElementById('btn-submit');
       btn.disabled = true;
-      btn.innerText = 'AI解析中...';
+      const originalText = btn.textContent;
+      btn.innerHTML = '<span class="animate-spin inline-block mr-2">⏳</span>AI解析中...';
 
       try {
         const file = fileInput.files[0];
 
-        const filePath = `${currentUser.id}/${Date.now()}_${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from('study-photos').upload(filePath, file);
-        if (uploadErr) throw uploadErr;
+        // デモAI判定（簡易版）
+        const aiEstimated = Math.max(Math.floor(selfReported * 0.9), 5);
+        const finalCalculated = Math.floor((selfReported + aiEstimated) / 2);
+        const reason = '写真から判定可能な学習内容を確認しました。';
 
-        const { data: { publicUrl } } = supabase.storage.from('study-photos').getPublicUrl(filePath);
+        const imageUrl = URL.createObjectURL(file);
 
-        const { data: pastLogs } = await supabase
-          .from('study_logs')
-          .select('self_reported_minutes, ai_estimated_minutes, final_calculated_minutes')
-          .eq('user_id', currentUser.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        const historyContext = pastLogs && pastLogs.length > 0 ? JSON.stringify(pastLogs) : '過去履歴なし';
-        const base64Data = await fileToBase64(file);
-
-        const prompt = `
-          あなたは学習時間判定AIです。提供されたノート・教材画像の内容（書き込み量、文字数、問題数等）と、自己申告時間をもとに、適切な勉強時間を算出してください。
-          
-          【本人の過去傾向（自己申告値, AI推定値, 確定値）】:
-          ${historyContext}
-          
-          【今回の入力】:
-          - 自己申告時間: ${selfReported}分
-          
-          【指示】:
-          1. 画像から推定される勉強時間 (ai_estimated) を算出してください。
-          2. 過去の傾向と自己申告の偏りを評価し、最終的な正確な勉強時間 (final_calculated) を提示してください。
-          3. 出力は以下のJSON形式のみで返してください。
-
-          {"ai_estimated": 数値, "final_calculated": 数値, "reason": "根拠（50文字以内）"}
-        `;
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            prompt,
-            { inlineData: { mimeType: file.type, data: base64Data } }
-          ],
-          config: { responseMimeType: 'application/json' }
-        });
-
-        const res = JSON.parse(response.text);
-
-        await supabase.from('study_logs').insert({
+        const newEntry = {
+          id: Date.now(),
           user_id: currentUser.id,
-          image_url: publicUrl,
+          created_at: new Date().toISOString(),
+          image_url: imageUrl,
           self_reported_minutes: selfReported,
-          ai_estimated_minutes: res.ai_estimated,
-          final_calculated_minutes: res.final_calculated,
-          ai_feedback: res.reason
-        });
+          ai_estimated_minutes: aiEstimated,
+          final_calculated_minutes: finalCalculated,
+          ai_feedback: reason
+        };
+
+        mockData.push(newEntry);
 
         document.getElementById('result-box').classList.remove('hidden');
-        document.getElementById('res-times').innerText = `自己申告: ${selfReported}分 | AI推定: ${res.ai_estimated}分 → 確定時間: ${res.final_calculated}分`;
-        document.getElementById('res-reason').innerText = `判定理由: ${res.reason}`;
+        document.getElementById('res-times').textContent = `自己申告: ${selfReported}分 | AI推定: ${aiEstimated}分 → 確定時間: ${finalCalculated}分`;
+        document.getElementById('res-reason').textContent = `判定理由: ${reason}`;
 
         loadWeeklyDetails();
         renderChart('month');
@@ -334,33 +355,104 @@
         document.getElementById('self-time').value = '';
         fileInput.value = '';
 
+        showNotification('記録を保存しました！', 'success');
+
       } catch (err) {
-        alert('エラーが発生しました: ' + err.message);
+        showNotification('エラー: ' + err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.innerText = 'AIで判定して記録を保存';
+        btn.textContent = originalText;
       }
-    };
+    }
 
-    // Chart.js描画
-    window.renderChart = async (type) => {
+    // ===== データ表示関数 =====
+    async function loadWeeklyDetails() {
+      const grid = document.getElementById('weekly-details-grid');
+      grid.innerHTML = '';
+
+      const daysName = ['日', '月', '火', '水', '木', '金', '土'];
+      
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const logs = mockData.filter(l => {
+        const d = new Date(l.created_at);
+        return d >= startOfWeek && d <= endOfWeek && l.user_id === currentUser.id;
+      });
+
+      for (let i = 0; i < 7; i++) {
+        const targetDate = new Date(startOfWeek);
+        targetDate.setDate(startOfWeek.getDate() + i);
+
+        const dayLogs = logs.filter(l => {
+          const d = new Date(l.created_at);
+          return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
+        });
+
+        const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm hover:shadow-md transition";
+        
+        const photosHtml = dayLogs.map(l => `<img src="${l.image_url}" class="w-full h-12 object-cover rounded shadow-inner" alt="勉強ノート" />`).join('');
+
+        card.innerHTML = `
+          <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
+            <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
+            <span class="text-indigo-600">${totalMinutes}分</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 my-1">
+            ${photosHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center py-2">記録なし</p>'}
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    async function loadParentDashboard() {
+      const container = document.getElementById('parent-history-list');
+      const userLogs = mockData.filter(l => l.user_id === currentUser.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      if (userLogs.length === 0) {
+        container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
+        return;
+      }
+
+      container.innerHTML = userLogs.map(l => {
+        const d = new Date(l.created_at).toLocaleString('ja-JP');
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 text-xs">${d}</td>
+            <td class="p-3"><a href="${l.image_url}" target="_blank" rel="noopener noreferrer"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded border cursor-pointer hover:opacity-75 transition" alt="勉強ノート" /></a></td>
+            <td class="p-3">${l.self_reported_minutes}分</td>
+            <td class="p-3">${l.ai_estimated_minutes}分</td>
+            <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
+            <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ===== グラフ描画 =====
+    async function renderChart(type) {
       const monthBtn = document.getElementById('btn-chart-month');
       const yearBtn = document.getElementById('btn-chart-year');
 
       if (type === 'month') {
-        monthBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
-        yearBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+        monthBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md cursor-pointer";
+        yearBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer hover:bg-slate-300";
       } else {
-        yearBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md";
-        monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md";
+        yearBtn.className = "px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md cursor-pointer";
+        monthBtn.className = "px-3 py-1 bg-slate-200 text-slate-700 text-xs font-semibold rounded-md cursor-pointer hover:bg-slate-300";
       }
 
-      const { data: logs } = await supabase
-        .from('study_logs')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: true });
-
+      const userLogs = mockData.filter(l => l.user_id === currentUser.id);
       let labels = [];
       let dataValues = [];
 
@@ -373,7 +465,7 @@
         currentSun.setDate(now.getDate() - now.getDay());
         currentSun.setHours(0,0,0,0);
 
-        (logs || []).forEach(log => {
+        userLogs.forEach(log => {
           const logDate = new Date(log.created_at);
           const diffDays = Math.floor((currentSun - logDate) / (1000 * 60 * 60 * 24));
           
@@ -387,7 +479,7 @@
         labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
         dataValues = new Array(12).fill(0);
 
-        (logs || []).forEach(log => {
+        userLogs.forEach(log => {
           const m = new Date(log.created_at).getMonth();
           dataValues[m] += log.final_calculated_minutes;
         });
@@ -413,118 +505,61 @@
           responsive: true,
           maintainAspectRatio: false,
           scales: {
-            y: { beginAtZero: true, title: { display: true, text: '分' } }
+            y: { 
+              beginAtZero: true,
+              ticks: { stepSize: 60 }
+            }
+          },
+          plugins: {
+            legend: {
+              labels: { font: { size: 12 } }
+            }
           }
         }
       });
-    };
-
-    // 内部関数
-    function showApp() {
-      document.getElementById('sec-auth').classList.add('hidden');
-      document.getElementById('sec-app').classList.remove('hidden');
-      document.getElementById('btn-logout').classList.remove('hidden');
-      
-      loadWeeklyDetails();
-      window.renderChart('month');
-      loadParentDashboard();
     }
 
-    async function loadWeeklyDetails() {
-      const grid = document.getElementById('weekly-details-grid');
-      grid.innerHTML = '';
+    // ===== イベントリスナー設定 =====
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 認証タブ
+      document.getElementById('tab-auth-login').addEventListener('click', () => switchAuthMode('login'));
+      document.getElementById('tab-auth-signup').addEventListener('click', () => switchAuthMode('signup'));
 
-      const daysName = ['日', '月', '火', '水', '木', '金', '土'];
-      
-      const now = new Date();
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
+      // ログイン/新規登録ボタン
+      document.getElementById('btn-auth-login').addEventListener('click', handleLogin);
+      document.getElementById('btn-auth-signup').addEventListener('click', handleSignUp);
 
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
+      // ログアウトボタン
+      document.getElementById('btn-logout').addEventListener('click', handleLogout);
 
-      const { data: logs } = await supabase
-        .from('study_logs')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .gte('created_at', startOfWeek.toISOString())
-        .lte('created_at', endOfWeek.toISOString());
+      // 子ども/保護者タブ
+      document.getElementById('tab-child').addEventListener('click', () => switchRole('child'));
+      document.getElementById('tab-parent').addEventListener('click', () => switchRole('parent'));
 
-      for (let i = 0; i < 7; i++) {
-        const targetDate = new Date(startOfWeek);
-        targetDate.setDate(startOfWeek.getDate() + i);
+      // 勉強記録ボタン
+      document.getElementById('btn-submit').addEventListener('click', processStudySession);
 
-        const dayLogs = (logs || []).filter(l => {
-          const d = new Date(l.created_at);
-          return d.getDate() === targetDate.getDate() && d.getMonth() === targetDate.getMonth();
-        });
+      // チャートボタン
+      document.getElementById('btn-chart-month').addEventListener('click', () => renderChart('month'));
+      document.getElementById('btn-chart-year').addEventListener('click', () => renderChart('year'));
 
-        const totalMinutes = dayLogs.reduce((acc, cur) => acc + cur.final_calculated_minutes, 0);
-
-        const card = document.createElement('div');
-        card.className = "bg-white p-3 border rounded-lg flex flex-col justify-between space-y-2 shadow-sm";
-        
-        let photosHtml = dayLogs.map(l => `<img src="${l.image_url}" class="w-full h-12 object-cover rounded shadow-inner" />`).join('');
-
-        card.innerHTML = `
-          <div class="flex justify-between items-center text-xs font-bold text-slate-500 border-b pb-1">
-            <span>${daysName[i]} (${targetDate.getMonth()+1}/${targetDate.getDate()})</span>
-            <span class="text-indigo-600">${totalMinutes}分</span>
-          </div>
-          <div class="grid grid-cols-2 gap-1 my-1">
-            ${photosHtml || '<p class="text-[10px] text-slate-400 col-span-2 text-center py-2">記録なし</p>'}
-          </div>
-        `;
-        grid.appendChild(card);
-      }
-    }
-
-    async function loadParentDashboard() {
-      const container = document.getElementById('parent-history-list');
-      
-      const { data: logs } = await supabase
-        .from('study_logs')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false });
-
-      if (!logs || logs.length === 0) {
-        container.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">データがありません</td></tr>`;
-        return;
-      }
-
-      container.innerHTML = logs.map(l => {
-        const d = new Date(l.created_at).toLocaleString('ja-JP');
-        return `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 text-xs">${d}</td>
-            <td class="p-3"><a href="${l.image_url}" target="_blank"><img src="${l.image_url}" class="w-10 h-10 object-cover rounded border" /></a></td>
-            <td class="p-3">${l.self_reported_minutes}分</td>
-            <td class="p-3">${l.ai_estimated_minutes}分</td>
-            <td class="p-3 font-bold text-indigo-600">${l.final_calculated_minutes}分</td>
-            <td class="p-3 text-xs text-slate-500">${l.ai_feedback || '-'}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      // Enterキーでログイン
+      document.getElementById('auth-password').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          document.getElementById('btn-auth-login').click();
+        }
       });
-    }
 
-    // 初期起動時のセッションチェック
-    window.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        currentUser = session.user;
-        showApp();
+      // セッションチェック
+      if (USE_SUPABASE) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          currentUser = session.user;
+          showApp();
+        }
+      } else {
+        // デモモード表示
+        document.getElementById('auth-status').classList.remove('hidden');
       }
     });
   </script>
