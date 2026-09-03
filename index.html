@@ -128,10 +128,13 @@
   <script type="module">
     import { GoogleGenAI } from '@google/genai';
 
-    // --- 【設定】必要情報を入力してください ---
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
-    const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY';
+    // --- Supabaseの設定 ---
+    const SUPABASE_URL = 'https://widujrxsvoqjadbjpyvf.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_vn1971MuJesbrHfD9Irtmw_3xem2V-h';
+
+    // --- Gemini API Key ---
+    // GitHub Actionsによるデプロイ時に Secrets (GEMINI_API_KEY) に自動置換されます
+    const GEMINI_API_KEY = 'GEMINI_API_KEY_PLACEHOLDER';
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -291,7 +294,7 @@
 
       } catch (err) {
         alert('エラーが発生しました: ' + err.message);
-      } finally {
+      } fontly {
         btn.disabled = false;
         btn.innerText = 'AIで判定して記録を保存';
       }
